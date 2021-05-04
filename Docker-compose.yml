@@ -1,7 +1,7 @@
 version: "3"
 services:
-  myapp:
-    image: myapp
+  webapp:
+    image: webapp
     build:
       context: ./app
     depends_on:
@@ -10,28 +10,28 @@ services:
     ports:
       - 8080:80
     volumes:
-      - myapp:/app
+      - webapp:/var/www/html/storage
     ## we wait for the MySQL container to be up and running
     ## then we run the migration
     ## and finally we start apache
-    entrypoint: sh -c "sleep 30 && php /app/artisan migrate && apache2-foreground"
+    entrypoint: sh -c "sleep 30 && php /var/www/html/artisan migrate && apache2-foreground"
 
   queue:
-    image: myapp
+    image: webapp
     depends_on:
-      - myapp
+      - webapp
     volumes:
-      - myapp:/app
+      - webapp:/var/www/html/storage
     ## for the queue worker, we use the same image, but run 
     ## artisan queue:work
-    entrypoint: php /app/artisan queue:work --verbose --tries=3 --timeout=60
+    entrypoint: php /var/www/html/artisan queue:work --verbose --tries=3 --timeout=60
 
   scheduler:
-    image: myapp
+    image: webapp
     depends_on:
-      - myapp
+      - webapp
     ## for the scheduler we use an infinite while loop
-    entrypoint: sh -c "while true; do php /app/artisan schedule:run --verbose & sleep 60; done"
+    entrypoint: sh -c "while true; do php /var/www/html/artisan schedule:run --verbose & sleep 60; done"
 
   redis:
     image: redis:4-alpine
@@ -44,10 +44,26 @@ services:
       - mysql:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: myapp
+      MYSQL_DATABASE: webapp
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:6.3.2
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+  kibana:
+    image: docker.elastic.co/kibana/kibana:6.3.2
+    ports:
+      - "5601:5601"
 
 volumes:
-  myapp:
+  webapp:
     driver: "local"
   redis:
     driver: "local"
